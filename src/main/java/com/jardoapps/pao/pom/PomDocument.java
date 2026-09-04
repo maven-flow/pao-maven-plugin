@@ -2,7 +2,10 @@ package com.jardoapps.pao.pom;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.UnsupportedCharsetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -13,6 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A pom.xml held as raw text plus an index of its elements.
@@ -35,27 +40,64 @@ public final class PomDocument {
     private record Edit(int start, int end, String replacement) {
     }
 
+    /** {@code encoding="..."} in the XML prolog, if the document declares one. */
+    private static final Pattern PROLOG_ENCODING =
+            Pattern.compile("\\A<\\?xml\\s[^>]*?encoding\\s*=\\s*[\"']([^\"']+)[\"']");
+
     private final Path path;
     private final String source;
+    private final Charset charset;
     private final List<XmlElement> elements;
     private final List<Edit> edits = new ArrayList<>();
 
-    private PomDocument(Path path, String source, List<XmlElement> elements) {
+    private PomDocument(Path path, String source, Charset charset, List<XmlElement> elements) {
         this.path = path;
         this.source = source;
+        this.charset = charset;
         this.elements = elements;
     }
 
     public static PomDocument load(Path path) {
         try {
-            return parse(path, Files.readString(path, StandardCharsets.UTF_8));
+            byte[] bytes = Files.readAllBytes(path);
+            Charset charset = declaredCharset(bytes, path);
+            return parse(path, new String(bytes, charset), charset);
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot read " + path, e);
         }
     }
 
     public static PomDocument parse(Path path, String source) {
-        return new PomDocument(path, source, scan(source, path));
+        return parse(path, source, StandardCharsets.UTF_8);
+    }
+
+    public static PomDocument parse(Path path, String source, Charset charset) {
+        return new PomDocument(path, source, charset, scan(source, path));
+    }
+
+    /**
+     * The encoding named in the XML prolog, defaulting to UTF-8. The same charset is
+     * used again on the way out, so the bytes the plugin did not touch survive
+     * unchanged.
+     *
+     * <p>The prolog itself is ASCII by definition, and ISO-8859-1 maps every byte to a
+     * character without ever failing, so it can be read out of the raw bytes before the
+     * real encoding is known. That covers the byte-oriented encodings a pom.xml
+     * realistically uses; a UTF-16 document, whose prolog is not byte-per-character,
+     * falls through to the UTF-8 default as it did before.
+     */
+    private static Charset declaredCharset(byte[] bytes, Path path) {
+        String prolog = new String(bytes, 0, Math.min(bytes.length, 200), StandardCharsets.ISO_8859_1);
+        Matcher matcher = PROLOG_ENCODING.matcher(prolog);
+        if (!matcher.find()) {
+            return StandardCharsets.UTF_8;
+        }
+        String name = matcher.group(1);
+        try {
+            return Charset.forName(name);
+        } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
+            throw new IllegalArgumentException(path + ": unsupported encoding '" + name + "' in the XML prolog", e);
+        }
     }
 
     // --- Scanning ---------------------------------------------------------
@@ -292,7 +334,7 @@ public final class PomDocument {
             return false;
         }
         try {
-            Files.writeString(path, rendered, StandardCharsets.UTF_8);
+            Files.writeString(path, rendered, charset);
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot write " + path, e);
         }

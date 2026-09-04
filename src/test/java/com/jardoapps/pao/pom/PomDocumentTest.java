@@ -1,17 +1,26 @@
 package com.jardoapps.pao.pom;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class PomDocumentTest {
+
+    @TempDir
+    Path directory;
 
     private static PomDocument parse(String xml) {
         return PomDocument.parse(Path.of("pom.xml"), xml);
@@ -226,5 +235,91 @@ class PomDocumentTest {
                 """);
 
         assertFalse(document.isModified());
+    }
+
+    // --- Encoding ---------------------------------------------------------
+
+    private static final String LATIN_1_POM = """
+            <?xml version="1.0" encoding="ISO-8859-1"?>
+            <project>
+                <artifactId>my-app</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+                <description>Espa\u00f1a, caf\u00e9 and na\u00efve r\u00e9sum\u00e9s</description>
+            </project>
+            """;
+
+    @Test
+    @DisplayName("a pom is read in the encoding its prolog declares")
+    void readsDeclaredEncoding() throws Exception {
+        Path pom = directory.resolve("latin1-pom.xml");
+        Files.write(pom, LATIN_1_POM.getBytes(StandardCharsets.ISO_8859_1));
+
+        // Read as UTF-8 these bytes are malformed and loading fails outright.
+        PomDocument document = PomDocument.load(pom);
+
+        assertEquals("1.0.0-SNAPSHOT", document.valueOf(document.projectVersion().orElseThrow()));
+        assertTrue(document.render().contains("Espa\u00f1a, caf\u00e9 and na\u00efve r\u00e9sum\u00e9s"));
+    }
+
+    @Test
+    @DisplayName("a pom is written back in the encoding it was read in")
+    void writesDeclaredEncoding() throws Exception {
+        Path pom = directory.resolve("latin1-pom.xml");
+        Files.write(pom, LATIN_1_POM.getBytes(StandardCharsets.ISO_8859_1));
+        PomDocument document = PomDocument.load(pom);
+
+        document.setValue(document.projectVersion().orElseThrow(), "1.0.0-feature-x-SNAPSHOT");
+        assertTrue(document.save());
+
+        // Everything but the version must come back byte for byte, so the declared
+        // encoding and the actual bytes cannot drift apart.
+        byte[] expected = LATIN_1_POM.replace("1.0.0-SNAPSHOT", "1.0.0-feature-x-SNAPSHOT")
+                .getBytes(StandardCharsets.ISO_8859_1);
+        assertArrayEquals(expected, Files.readAllBytes(pom));
+    }
+
+    @Test
+    @DisplayName("a pom without a declared encoding is treated as UTF-8")
+    void defaultsToUtf8() throws Exception {
+        String xml = """
+                <project>
+                    <artifactId>my-app</artifactId>
+                    <version>1.0.0-SNAPSHOT</version>
+                    <description>caf\u00e9</description>
+                </project>
+                """;
+        Path pom = directory.resolve("no-prolog-pom.xml");
+        Files.write(pom, xml.getBytes(StandardCharsets.UTF_8));
+
+        PomDocument document = PomDocument.load(pom);
+        document.setValue(document.projectVersion().orElseThrow(), "1.0.0-feature-x-SNAPSHOT");
+        document.save();
+
+        assertArrayEquals(xml.replace("1.0.0-SNAPSHOT", "1.0.0-feature-x-SNAPSHOT")
+                .getBytes(StandardCharsets.UTF_8), Files.readAllBytes(pom));
+    }
+
+    @Test
+    @DisplayName("an encoding the JVM does not know is reported against the file")
+    void rejectsUnknownEncoding() throws Exception {
+        Path pom = directory.resolve("odd-pom.xml");
+        Files.write(pom, """
+                <?xml version="1.0" encoding="NO-SUCH-CHARSET"?>
+                <project><artifactId>my-app</artifactId><version>1.0.0-SNAPSHOT</version></project>
+                """.getBytes(StandardCharsets.UTF_8));
+
+        IllegalArgumentException failure =
+                assertThrows(IllegalArgumentException.class, () -> PomDocument.load(pom));
+
+        assertTrue(failure.getMessage().contains("NO-SUCH-CHARSET"), failure.getMessage());
+    }
+
+    @Test
+    @DisplayName("the charset can be supplied directly when parsing from a string")
+    void parsesWithExplicitCharset() {
+        Charset charset = StandardCharsets.ISO_8859_1;
+        PomDocument document = PomDocument.parse(Path.of("pom.xml"), LATIN_1_POM, charset);
+
+        assertEquals("1.0.0-SNAPSHOT", document.valueOf(document.projectVersion().orElseThrow()));
     }
 }
