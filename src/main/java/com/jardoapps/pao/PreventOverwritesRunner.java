@@ -77,8 +77,6 @@ public class PreventOverwritesRunner {
 
         PinConfig pins = new PinConfigParser(log).parse(resolveConfigFile(), branchName);
 
-        git.configureUser(settings.getGitUserName(), settings.getGitUserEmail());
-
         List<String> commits = new ArrayList<>();
         if (coreBranch) {
             removeBranchVersion(reactor, root, commits);
@@ -275,7 +273,7 @@ public class PreventOverwritesRunner {
         written.forEach(path -> log.info("Updated " + path));
 
         String fullMessage = message + settings.getCommitMessageSuffix();
-        git.commit(fullMessage, written);
+        git.commit(fullMessage, written, settings.getGitUserName(), settings.getGitUserEmail());
         commits.add(fullMessage);
     }
 

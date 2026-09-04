@@ -13,18 +13,14 @@ public class FakeGitClient implements GitClient {
     private final List<String> commits = new ArrayList<>();
     private final Map<String, List<Path>> committedFiles = new LinkedHashMap<>();
     private final List<String> pushes = new ArrayList<>();
-    private String configuredUser;
+    private String commitAuthor;
     private String currentBranch;
 
     @Override
-    public void configureUser(String name, String email) {
-        configuredUser = name + " <" + email + ">";
-    }
-
-    @Override
-    public void commit(String message, List<Path> files) {
+    public void commit(String message, List<Path> files, String userName, String userEmail) {
         commits.add(message);
         committedFiles.put(message, List.copyOf(files));
+        commitAuthor = userName + " <" + userEmail + ">";
     }
 
     @Override
@@ -55,7 +51,8 @@ public class FakeGitClient implements GitClient {
         return committedFiles.getOrDefault(message, List.of());
     }
 
-    public String getConfiguredUser() {
-        return configuredUser;
+    /** The identity the runner asked git to attribute commits to, or null if it never committed. */
+    public String getCommitAuthor() {
+        return commitAuthor;
     }
 }

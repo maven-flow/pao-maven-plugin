@@ -7,15 +7,12 @@ import java.util.Optional;
 /** The git operations the plugin needs, kept behind an interface so runs can be faked in tests. */
 public interface GitClient {
 
-    /** Sets the local user identity used for commits. */
-    void configureUser(String name, String email);
-
     /**
-     * Commits exactly the given files. Anything else in the working tree - an earlier
-     * pipeline step's output, a developer's own edits - is deliberately left out, so
-     * the commit matches its message.
+     * Commits exactly the given files under the given identity. Anything else in the
+     * working tree - an earlier pipeline step's output, a developer's own edits - is
+     * deliberately left out, so the commit matches its message.
      */
-    void commit(String message, List<Path> files);
+    void commit(String message, List<Path> files, String userName, String userEmail);
 
     /** Pushes HEAD to the given branch on {@code origin}. */
     void push(String branch);

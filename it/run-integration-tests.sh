@@ -211,6 +211,53 @@ test_commit_scope() {
     PASSED=$((PASSED + 1))
 }
 
+# --- Test: the run leaves no git identity behind ----------------------------
+
+test_leaves_no_git_config() {
+    log "the run does not write a git identity into the repository"
+    local dir
+    dir=$(mktemp -d)
+    trap 'rm -rf "$dir"' RETURN
+
+    setup_repo "$dir" "1.2.3-SNAPSHOT"
+    git -C "$dir" config --unset user.name
+    git -C "$dir" config --unset user.email
+
+    run_goal "$dir" -Dpao.branchName=feature/FEA-123 -Dpao.gitUserName=pao-bot \
+        -Dpao.gitUserEmail=pao-bot@example.com
+
+    local author
+    author=$(git -C "$dir" log -1 --format='%an <%ae>')
+    if [[ "$author" == "pao-bot <pao-bot@example.com>" ]]; then
+        log "  ok: the commit carries the configured identity"
+    else
+        fail "expected the configured identity on the commit, got '$author'"
+    fi
+
+    if git -C "$dir" config --local --get user.name > /dev/null 2>&1; then
+        fail "a local user.name was left behind in .git/config"
+    else
+        log "  ok: nothing left behind in .git/config"
+    fi
+
+    # A core branch with nothing to strip must not touch git at all, which is what
+    # made the goal die outside a working copy.
+    local plain
+    plain=$(mktemp -d)
+    trap 'rm -rf "$dir" "$plain"' RETURN
+    mkdir -p "$plain/core"
+    cp "$dir/pom.xml" "$plain/pom.xml"
+    cp "$dir/core/pom.xml" "$plain/core/pom.xml"
+    sed -i 's|-feature-FEA-123-SNAPSHOT|-SNAPSHOT|g' "$plain/pom.xml" "$plain/core/pom.xml"
+    if run_goal "$plain" -Dpao.branchName=main > /dev/null 2>&1; then
+        log "  ok: a no-op run succeeds outside a git working copy"
+    else
+        fail "a no-op run failed outside a git working copy"
+    fi
+
+    PASSED=$((PASSED + 1))
+}
+
 # --- Test: pao.skip short-circuits ------------------------------------------
 
 test_skip() {
@@ -235,6 +282,7 @@ test_idempotent
 test_branch_from_environment
 test_invalid_pin_fails
 test_commit_scope
+test_leaves_no_git_config
 test_skip
 
 echo ""

@@ -37,14 +37,7 @@ public class CommandLineGitClient implements GitClient {
     }
 
     @Override
-    public void configureUser(String name, String email) {
-        log.info("Setting up git configuration...");
-        run(true, "config", "--local", "user.name", name);
-        run(true, "config", "--local", "user.email", email);
-    }
-
-    @Override
-    public void commit(String message, List<Path> files) {
+    public void commit(String message, List<Path> files, String userName, String userEmail) {
         if (files.isEmpty()) {
             log.debug("Nothing to commit.");
             return;
@@ -54,7 +47,11 @@ public class CommandLineGitClient implements GitClient {
         // Scoping both the staging and the commit to known paths keeps anything else
         // in the working tree out of it, whoever or whatever put it there.
         run(true, concat(List.of("add", "--"), paths));
-        run(true, concat(List.of("commit", "-m", message, "--"), paths));
+
+        // -c rather than `config --local`: the identity applies to this commit only and
+        // nothing is left behind in the repository's .git/config afterwards.
+        run(true, concat(List.of("-c", "user.name=" + userName, "-c", "user.email=" + userEmail,
+                "commit", "-m", message, "--"), paths));
     }
 
     private static String[] concat(List<String> head, List<String> tail) {

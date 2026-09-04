@@ -108,8 +108,8 @@ The CI call stays fully qualified. The short `mvn pao:apply` form additionally n
 | `enforceBranchVersion` | `pao.enforceBranchVersion` | `true` | Whether the project itself gets a branch-specific version. |
 | `pushChanges` | `pao.pushChanges` | `true` | Whether to push the resulting commits to `origin`. |
 | `commitMessageSuffix` | `pao.commitMessageSuffix` | *(empty)* | Appended to every commit message, e.g. `[skip ci]`. |
-| `gitUserName` | `pao.gitUserName` | `ci-bot` | Git user name for the commits. |
-| `gitUserEmail` | `pao.gitUserEmail` | `ci-bot@example.com` | Git email for the commits. |
+| `gitUserName` | `pao.gitUserName` | `ci-bot` | Git user name for the commits. Applied per commit; the repository's `.git/config` is not modified. |
+| `gitUserEmail` | `pao.gitUserEmail` | `ci-bot@example.com` | Git email for the commits. Applied per commit; the repository's `.git/config` is not modified. |
 | `coreBranches` | `pao.coreBranches` | `main master develop release*` | Branch patterns that keep the plain version. Globs allowed; space- or comma-separated. |
 | `configFile` | `pao.configFile` | `.prevent-overwrites.conf` | Optional per-branch pinning file, relative to the top-level project. |
 | `outputFile` | `pao.outputFile` | *(none)* | File to append `changes-made=<boolean>` to. |
