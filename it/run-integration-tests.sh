@@ -17,6 +17,7 @@ GOAL="com.jardoapps:pao-maven-plugin:${PLUGIN_VERSION}:apply"
 
 PASSED=0
 FAILED=0
+FAILED_BEFORE=0
 
 log() {
     echo "[IT] $*"
@@ -25,6 +26,19 @@ log() {
 fail() {
     echo "[IT]   FAILED: $*" >&2
     FAILED=$((FAILED + 1))
+}
+
+# Each test function brackets itself with these, so a test whose assertions failed
+# is not also counted as passed - which made the summary report the same test in
+# both columns.
+begin_test() {
+    log "$*"
+    FAILED_BEFORE=$FAILED
+}
+
+end_test() {
+    [[ "$FAILED" -eq "$FAILED_BEFORE" ]] && PASSED=$((PASSED + 1))
+    return 0
 }
 
 assert_version() {
@@ -83,7 +97,7 @@ run_goal() {
 # --- Test: the whole feature-branch / core-branch round trip ----------------
 
 test_round_trip() {
-    log "round trip across a multi-module reactor"
+    begin_test "round trip across a multi-module reactor"
     local dir
     dir=$(mktemp -d)
     trap 'rm -rf "$dir"' RETURN
@@ -114,13 +128,13 @@ test_round_trip() {
         fail "expected 3 commits, found $commits"
     fi
 
-    PASSED=$((PASSED + 1))
+    end_test
 }
 
 # --- Test: a second run on a core branch changes nothing --------------------
 
 test_idempotent() {
-    log "re-running on a core branch makes no further commits"
+    begin_test "re-running on a core branch makes no further commits"
     local dir
     dir=$(mktemp -d)
     trap 'rm -rf "$dir"' RETURN
@@ -136,13 +150,13 @@ test_idempotent() {
         fail "expected no new commit, found $((commits - 1))"
     fi
 
-    PASSED=$((PASSED + 1))
+    end_test
 }
 
 # --- Test: the branch name is taken from the CI environment -----------------
 
 test_branch_from_environment() {
-    log "branch name detected from the CI environment"
+    begin_test "branch name detected from the CI environment"
     local dir
     dir=$(mktemp -d)
     trap 'rm -rf "$dir"' RETURN
@@ -151,13 +165,13 @@ test_branch_from_environment() {
     (cd "$dir" && GITHUB_REF_NAME=feature/from-env mvn -B -q "$GOAL" -Dpao.pushChanges=false)
     assert_version "$dir/pom.xml" "1.2.3-feature-from-env-SNAPSHOT" "branch read from GITHUB_REF_NAME"
 
-    PASSED=$((PASSED + 1))
+    end_test
 }
 
 # --- Test: an invalid pin fails the build -----------------------------------
 
 test_invalid_pin_fails() {
-    log "an invalid pin fails the build"
+    begin_test "an invalid pin fails the build"
     local dir
     dir=$(mktemp -d)
     trap 'rm -rf "$dir"' RETURN
@@ -171,13 +185,13 @@ test_invalid_pin_fails() {
         log "  ok: build failed as expected"
     fi
 
-    PASSED=$((PASSED + 1))
+    end_test
 }
 
 # --- Test: the commit covers the poms and nothing else ----------------------
 
 test_commit_scope() {
-    log "unrelated working tree changes stay out of the commit"
+    begin_test "unrelated working tree changes stay out of the commit"
     local dir
     dir=$(mktemp -d)
     trap 'rm -rf "$dir"' RETURN
@@ -208,13 +222,13 @@ test_commit_scope() {
         fail "the unrelated modification was swept into the commit"
     fi
 
-    PASSED=$((PASSED + 1))
+    end_test
 }
 
 # --- Test: the run leaves no git identity behind ----------------------------
 
 test_leaves_no_git_config() {
-    log "the run does not write a git identity into the repository"
+    begin_test "the run does not write a git identity into the repository"
     local dir
     dir=$(mktemp -d)
     trap 'rm -rf "$dir"' RETURN
@@ -255,13 +269,13 @@ test_leaves_no_git_config() {
         fail "a no-op run failed outside a git working copy"
     fi
 
-    PASSED=$((PASSED + 1))
+    end_test
 }
 
 # --- Test: pao.skip short-circuits ------------------------------------------
 
 test_skip() {
-    log "pao.skip leaves the project alone"
+    begin_test "pao.skip leaves the project alone"
     local dir
     dir=$(mktemp -d)
     trap 'rm -rf "$dir"' RETURN
@@ -270,7 +284,7 @@ test_skip() {
     run_goal "$dir" -Dpao.branchName=feature/FEA-123 -Dpao.skip=true
     assert_version "$dir/pom.xml" "1.2.3-SNAPSHOT" "version untouched"
 
-    PASSED=$((PASSED + 1))
+    end_test
 }
 
 log "Using goal: $GOAL"
