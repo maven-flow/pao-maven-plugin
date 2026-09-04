@@ -129,9 +129,11 @@ A branch version is `<base>-<suffix>-SNAPSHOT`, where the base is a numeric vers
 | `1.2.3-SNAPSHOT` | — | *(not a branch version)* |
 | `1.2.3-rc.4-SNAPSHOT` | — | *(not a branch version)* |
 
+Release versions are left alone. The plugin exists because several branches would otherwise publish over one shared snapshot, so a project version without `-SNAPSHOT` is a sign the goal is running somewhere it was not meant to. Deriving a branch version from `1.2.3` would also be lossy — the trip back on a core branch produces `1.2.3-SNAPSHOT`, not `1.2.3` — so the version is logged and left unchanged instead.
+
 ## Multi-module projects
 
-The whole reactor is handled in one run. When the project version changes, `<parent><version>` in every module that points at a reactor project moves with it — otherwise the modules would reference a parent version that no longer exists and the build would stop resolving.
+The whole reactor is handled in one run. When the project version changes, every reference from one reactor module to another moves with it: `<parent><version>` in each module that inherits from a reactor project, and any `<dependency>` on a sibling module that spells its version out. Otherwise a module would point at a parent version that no longer exists, or resolve a sibling from the repository — the branch-agnostic snapshot another branch published — instead of from the reactor.
 
 ## Versions defined by properties
 

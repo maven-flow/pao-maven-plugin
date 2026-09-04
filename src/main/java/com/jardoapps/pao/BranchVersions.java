@@ -60,19 +60,28 @@ public final class BranchVersions {
     /**
      * Builds the branch version for the given suffix. An existing branch suffix is
      * replaced, otherwise the suffix is inserted before {@code -SNAPSHOT}.
+     *
+     * <p>Empty for a version that is not a snapshot. The plugin's premise is that
+     * several branches would otherwise publish over one shared snapshot, so a release
+     * version is a sign the goal is running somewhere it was not meant to - and
+     * deriving one anyway would be lossy: {@code 1.2.3} would become
+     * {@code 1.2.3-<suffix>-SNAPSHOT} and come back as {@code 1.2.3-SNAPSHOT}, turning
+     * a released project into a snapshot one on the way through.
      */
-    public static String withBranch(String version, String branchSuffix) {
+    public static Optional<String> withBranch(String version, String branchSuffix) {
         Optional<String> base = baseOf(version);
         if (base.isPresent()) {
-            return base.get() + "-" + branchSuffix + "-SNAPSHOT";
+            return Optional.of(base.get() + "-" + branchSuffix + "-SNAPSHOT");
         }
         Matcher plain = PLAIN_SNAPSHOT.matcher(version);
         if (plain.matches()) {
-            return plain.group(1) + "-" + branchSuffix + "-SNAPSHOT";
+            return Optional.of(plain.group(1) + "-" + branchSuffix + "-SNAPSHOT");
         }
-        String stripped = version.endsWith(SNAPSHOT) ? version.substring(0, version.length() - SNAPSHOT.length())
-                : version;
-        return stripped + "-" + branchSuffix + SNAPSHOT;
+        if (!version.endsWith(SNAPSHOT)) {
+            return Optional.empty();
+        }
+        String stripped = version.substring(0, version.length() - SNAPSHOT.length());
+        return Optional.of(stripped + "-" + branchSuffix + SNAPSHOT);
     }
 
     /** Turns a branch name into a version suffix: {@code feature/abc} -> {@code feature-abc}. */

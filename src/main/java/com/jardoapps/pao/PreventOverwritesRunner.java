@@ -129,7 +129,7 @@ public class PreventOverwritesRunner {
             if (!currentSuffix.equals(branchSuffix) && pins.isExclusiveSuffix(currentSuffix)) {
                 // The suffix belongs to another branch, so an inherited version would
                 // publish under - and overwrite - that branch's artifacts.
-                newVersion = BranchVersions.withBranch(currentVersion, branchSuffix);
+                newVersion = BranchVersions.withBranch(currentVersion, branchSuffix).orElseThrow();
                 log.info("Suffix '" + currentSuffix + "' is exclusive to another branch. Re-deriving to: "
                         + newVersion);
             } else {
@@ -137,7 +137,16 @@ public class PreventOverwritesRunner {
                 return;
             }
         } else {
-            newVersion = BranchVersions.withBranch(currentVersion, branchSuffix);
+            Optional<String> derived = BranchVersions.withBranch(currentVersion, branchSuffix);
+            if (derived.isEmpty()) {
+                log.warn("Project version '" + currentVersion + "' is not a snapshot, so no branch version can be"
+                        + " derived from it without turning a release into a snapshot - the trip back on a core"
+                        + " branch would produce '" + currentVersion + "-SNAPSHOT', not '" + currentVersion
+                        + "'. Leaving the version unchanged. This goal is meant for builds that publish"
+                        + " snapshots; set -Dpao.enforceBranchVersion=false to silence this.");
+                return;
+            }
+            newVersion = derived.get();
             log.info("Project does not have a branch version. Changing to: " + newVersion);
         }
 

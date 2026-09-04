@@ -48,7 +48,7 @@ class BranchVersionsTest {
     @Test
     @DisplayName("a two-digit patch number survives the round trip")
     void keepsMultiDigitPatchNumbers() {
-        String branchVersion = BranchVersions.withBranch("1.2.10-SNAPSHOT", "feature-abc");
+        String branchVersion = BranchVersions.withBranch("1.2.10-SNAPSHOT", "feature-abc").orElseThrow();
 
         assertEquals("1.2.10-feature-abc-SNAPSHOT", branchVersion);
         assertEquals(Optional.of("1.2.10-SNAPSHOT"), BranchVersions.withoutBranch(branchVersion));
@@ -60,7 +60,16 @@ class BranchVersionsTest {
             "1.2.3-rc.4-SNAPSHOT,              feature-abc,  1.2.3-rc.4-feature-abc-SNAPSHOT",
             "1.2.3-feature-old-SNAPSHOT,       feature-abc,  1.2.3-feature-abc-SNAPSHOT" })
     void addsOrReplacesBranchSuffix(String version, String suffix, String expected) {
-        assertEquals(expected, BranchVersions.withBranch(version, suffix));
+        assertEquals(Optional.of(expected), BranchVersions.withBranch(version, suffix));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "1.2.3", "1.2.3-rc.4", "1.2.3.RELEASE" })
+    @DisplayName("no branch version is derived from a release version")
+    void refusesToDeriveFromReleaseVersions(String version) {
+        // Deriving one would be lossy: the trip back on a core branch yields
+        // <base>-SNAPSHOT, silently turning a released project into a snapshot one.
+        assertEquals(Optional.empty(), BranchVersions.withBranch(version, "feature-abc"));
     }
 
     @Test

@@ -105,6 +105,19 @@ class PreventOverwritesRunnerTest extends RunnerTestSupport {
         assertTrue(result.coreBranch());
     }
 
+    @Test
+    @DisplayName("a release version is left alone instead of being turned into a snapshot")
+    void leavesReleaseVersionsAlone() {
+        Path pom = writeFile(project, "pom.xml", fixture("sample-pom.xml")
+                .replace("<version>1.2.3-SNAPSHOT</version>", "<version>1.2.3</version>"));
+
+        RunResult result = run(project, settings -> settings.setBranchName("feature/my-feature"));
+
+        assertTrue(read(pom).contains("<version>1.2.3</version>"));
+        assertFalse(result.changesMade());
+        assertTrue(git.getCommits().isEmpty());
+    }
+
     // --- Per-branch configuration ----------------------------------------
 
     @Test
