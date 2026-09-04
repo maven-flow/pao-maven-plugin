@@ -29,11 +29,18 @@ import com.jardoapps.pao.pom.XmlElement;
  */
 public class PreventOverwritesRunner {
 
-    /** What a run did, for reporting and for CI outputs. */
+    /**
+     * What a run did, for reporting and for CI outputs.
+     *
+     * @param previousProjectVersion the top-level project version as it was found on disk
+     * @param projectVersion the version the run left the top-level project at, equal to
+     *        {@code previousProjectVersion} when nothing was rewritten
+     */
     public record RunResult(
             boolean changesMade,
             String branchName,
             boolean coreBranch,
+            String previousProjectVersion,
             String projectVersion,
             List<String> commitMessages) {
     }
@@ -78,17 +85,19 @@ public class PreventOverwritesRunner {
         PinConfig pins = new PinConfigParser(log).parse(resolveConfigFile(), branchName);
 
         List<String> commits = new ArrayList<>();
+        String projectVersion;
         if (coreBranch) {
-            removeBranchVersion(reactor, root, commits);
+            projectVersion = removeBranchVersion(reactor, root, commits);
             removeDependencyBranchVersions(reactor, commits);
         } else {
-            enforceBranchVersion(reactor, root, branchName, pins, commits);
+            projectVersion = enforceBranchVersion(reactor, root, branchName, pins, commits);
             applyDependencyPins(reactor, pins, commits);
         }
 
         boolean changesMade = !commits.isEmpty();
         log.info(changesMade ? "Changes have been made." : "No changes have been made.");
         writeOutput("changes-made", String.valueOf(changesMade));
+        writeOutput("project-version", projectVersion);
 
         if (changesMade) {
             if (settings.isPushChanges()) {
@@ -99,16 +108,18 @@ public class PreventOverwritesRunner {
             }
         }
 
-        return new RunResult(changesMade, branchName, coreBranch, root.version(), List.copyOf(commits));
+        return new RunResult(changesMade, branchName, coreBranch, root.version(), projectVersion,
+                List.copyOf(commits));
     }
 
     // --- Feature branches -------------------------------------------------
 
-    private void enforceBranchVersion(List<ProjectModel> reactor, ProjectModel root, String branchName, PinConfig pins,
-            List<String> commits) {
+    /** @return the version the project is left at, which may be the one it started with */
+    private String enforceBranchVersion(List<ProjectModel> reactor, ProjectModel root, String branchName,
+            PinConfig pins, List<String> commits) {
         if (!settings.isEnforceBranchVersion()) {
             log.info("Project version enforcement is turned off.");
-            return;
+            return root.version();
         }
 
         String currentVersion = root.version();
@@ -121,7 +132,7 @@ public class PreventOverwritesRunner {
             newVersion = pinned.get();
             if (newVersion.equals(currentVersion)) {
                 log.info("Project already at pinned version.");
-                return;
+                return currentVersion;
             }
             log.info("Using pinned project version: " + newVersion);
         } else if (BranchVersions.isBranchVersion(currentVersion)) {
@@ -134,7 +145,7 @@ public class PreventOverwritesRunner {
                         + newVersion);
             } else {
                 log.info("Project already has a branch version.");
-                return;
+                return currentVersion;
             }
         } else {
             Optional<String> derived = BranchVersions.withBranch(currentVersion, branchSuffix);
@@ -144,7 +155,7 @@ public class PreventOverwritesRunner {
                         + " branch would produce '" + currentVersion + "-SNAPSHOT', not '" + currentVersion
                         + "'. Leaving the version unchanged. This goal is meant for builds that publish"
                         + " snapshots; set -Dpao.enforceBranchVersion=false to silence this.");
-                return;
+                return currentVersion;
             }
             newVersion = derived.get();
             log.info("Project does not have a branch version. Changing to: " + newVersion);
@@ -156,6 +167,7 @@ public class PreventOverwritesRunner {
         }
 
         changeProjectVersion(reactor, currentVersion, newVersion, COMMIT_ENFORCE, commits);
+        return newVersion;
     }
 
     private void applyDependencyPins(List<ProjectModel> reactor, PinConfig pins, List<String> commits) {
@@ -182,15 +194,17 @@ public class PreventOverwritesRunner {
 
     // --- Core branches ----------------------------------------------------
 
-    private void removeBranchVersion(List<ProjectModel> reactor, ProjectModel root, List<String> commits) {
+    /** @return the version the project is left at, which may be the one it started with */
+    private String removeBranchVersion(List<ProjectModel> reactor, ProjectModel root, List<String> commits) {
         String currentVersion = root.version();
         Optional<String> stripped = BranchVersions.withoutBranch(currentVersion);
         if (stripped.isEmpty()) {
-            return;
+            return currentVersion;
         }
         log.info("Project has a branch version. Removing it, since we are on a core branch.");
         log.info("New version: " + stripped.get());
         changeProjectVersion(reactor, currentVersion, stripped.get(), COMMIT_REMOVE_VERSION, commits);
+        return stripped.get();
     }
 
     private void removeDependencyBranchVersions(List<ProjectModel> reactor, List<String> commits) {

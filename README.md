@@ -62,7 +62,7 @@ jobs:
         run: mvn -B deploy
 ```
 
-The goal appends `changes-made=true|false` to `$GITHUB_OUTPUT`, so a later step can react to whether anything was rewritten.
+The goal appends `changes-made=true|false` and `project-version=<version>` to `$GITHUB_OUTPUT`, so a later step can react to whether anything was rewritten and under which version the build will publish. `project-version` is the version the run left the project at, which is the version it found when nothing changed.
 
 On `pull_request` and `pull_request_target` events the branch is read from `GITHUB_HEAD_REF` rather than `GITHUB_REF_NAME`, which on those events is the synthetic `<n>/merge` ref rather than a branch. GitLab merge request pipelines are handled the same way through `CI_MERGE_REQUEST_SOURCE_BRANCH_NAME`. Pushing back to the source branch of a pull request from a fork will not work regardless, so use `-Dpao.pushChanges=false` there.
 
@@ -114,7 +114,7 @@ The CI call stays fully qualified. The short `mvn pao:apply` form additionally n
 | `gitUserEmail` | `pao.gitUserEmail` | `ci-bot@example.com` | Git email for the commits. Applied per commit; the repository's `.git/config` is not modified. |
 | `coreBranches` | `pao.coreBranches` | `main master develop release*` | Branch patterns that keep the plain version. Globs allowed; space- or comma-separated. |
 | `configFile` | `pao.configFile` | `.prevent-overwrites.conf` | Optional per-branch pinning file, relative to the top-level project. |
-| `outputFile` | `pao.outputFile` | *(none)* | File to append `changes-made=<boolean>` to. |
+| `outputFile` | `pao.outputFile` | *(none)* | File to append `changes-made=<boolean>` and `project-version=<version>` to. |
 | `skip` | `pao.skip` | `false` | Skips execution entirely. |
 
 The branch name is taken from `branchName` if set, otherwise from the first of `GITHUB_REF_NAME`, `CI_COMMIT_REF_NAME`, `BITBUCKET_BRANCH`, `CIRCLE_BRANCH` or `TRAVIS_BRANCH` that is present, otherwise from `git rev-parse --abbrev-ref HEAD`.

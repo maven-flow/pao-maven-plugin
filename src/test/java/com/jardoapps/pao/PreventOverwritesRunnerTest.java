@@ -274,7 +274,7 @@ class PreventOverwritesRunnerTest extends RunnerTestSupport {
     }
 
     @Test
-    @DisplayName("the changes-made output is appended to the configured output file")
+    @DisplayName("the outputs are appended to the configured output file")
     void writesOutputFile() {
         writePom(project, "sample-pom.xml");
         Path output = project.resolve("build.env");
@@ -283,7 +283,30 @@ class PreventOverwritesRunnerTest extends RunnerTestSupport {
                 .setBranchName("feature/my-feature")
                 .setOutputFile(output));
 
-        assertEquals("changes-made=true", read(output).strip());
+        assertEquals(List.of("changes-made=true", "project-version=1.2.3-feature-my-feature-SNAPSHOT"),
+                read(output).strip().lines().toList());
+    }
+
+    @Test
+    @DisplayName("the result reports the version the run produced, alongside the one it started from")
+    void reportsResultingProjectVersion() {
+        writePom(project, "sample-pom.xml");
+
+        RunResult result = run(project, settings -> settings.setBranchName("feature/my-feature"));
+
+        assertEquals("1.2.3-feature-my-feature-SNAPSHOT", result.projectVersion());
+        assertEquals("1.2.3-SNAPSHOT", result.previousProjectVersion());
+    }
+
+    @Test
+    @DisplayName("a run that changes nothing reports the version unchanged")
+    void reportsUnchangedProjectVersion() {
+        writePom(project, "sample-pom.xml");
+
+        RunResult result = run(project, settings -> settings.setBranchName("main"));
+
+        assertEquals("1.2.3-SNAPSHOT", result.projectVersion());
+        assertEquals("1.2.3-SNAPSHOT", result.previousProjectVersion());
     }
 
     @Test
