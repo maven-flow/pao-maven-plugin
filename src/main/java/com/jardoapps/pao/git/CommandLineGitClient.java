@@ -1,12 +1,15 @@
 package com.jardoapps.pao.git;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.maven.plugin.logging.Log;
@@ -80,12 +83,16 @@ public class CommandLineGitClient implements GitClient {
 
         log.debug("Running: " + String.join(" ", command));
 
+        ProcessBuilder builder = new ProcessBuilder(command)
+                .directory(workingDirectory.toFile())
+                .redirectErrorStream(true);
+        // Without this, an https remote with no usable credential helper prompts for a
+        // username on stdin and the build blocks until the CI job itself is killed.
+        builder.environment().put("GIT_TERMINAL_PROMPT", "0");
+
         Process process;
         try {
-            process = new ProcessBuilder(command)
-                    .directory(workingDirectory.toFile())
-                    .redirectErrorStream(true)
-                    .start();
+            process = builder.start();
         } catch (IOException e) {
             throw new PaoException("Cannot run: " + String.join(" ", command), e);
         }
@@ -93,15 +100,29 @@ public class CommandLineGitClient implements GitClient {
         String output;
         int exitCode;
         try {
-            output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            // Nothing is ever written to git, and a closed stdin makes anything that
+            // would have prompted fail immediately instead of waiting for input.
+            process.getOutputStream().close();
+
+            // Draining stdout on another thread is what makes the timeout meaningful:
+            // read on this thread and it blocks until git exits, so waitFor would only
+            // ever see an already-terminated process. Reading after waitFor instead
+            // would deadlock on output larger than the pipe buffer.
+            CompletableFuture<byte[]> reader = CompletableFuture.supplyAsync(() -> readAll(process));
+
             if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
+                reader.cancel(true);
                 throw new PaoException("Timed out after " + TIMEOUT_SECONDS + "s: " + String.join(" ", command));
             }
             exitCode = process.exitValue();
+            output = new String(reader.join(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new PaoException("Cannot read output of: " + String.join(" ", command), e);
+        } catch (CompletionException e) {
+            throw new PaoException("Cannot read output of: " + String.join(" ", command), e.getCause());
         } catch (InterruptedException e) {
+            process.destroyForcibly();
             Thread.currentThread().interrupt();
             throw new PaoException("Interrupted while running: " + String.join(" ", command), e);
         }
@@ -111,5 +132,15 @@ public class CommandLineGitClient implements GitClient {
                     + System.lineSeparator() + output.strip());
         }
         return new Result(exitCode, output);
+    }
+
+    private static byte[] readAll(Process process) {
+        try {
+            return process.getInputStream().readAllBytes();
+        } catch (IOException e) {
+            // Expected when the process is destroyed on timeout; the caller has already
+            // decided the run failed, so the partial output is of no use either way.
+            throw new UncheckedIOException(e);
+        }
     }
 }
