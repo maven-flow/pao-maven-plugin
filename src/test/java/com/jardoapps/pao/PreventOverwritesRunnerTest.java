@@ -243,6 +243,19 @@ class PreventOverwritesRunnerTest extends RunnerTestSupport {
     }
 
     @Test
+    @DisplayName("only the poms the run wrote are committed")
+    void commitsOnlyTheFilesItWrote() {
+        Path pom = writePom(project, "sample-pom.xml");
+        // Whatever else is in the tree - an earlier pipeline step's output, or a
+        // developer's own edits - must stay out of the version commit.
+        writeFile(project, "left-behind.txt", "not ours to commit");
+
+        run(project, settings -> settings.setBranchName("feature/my-feature"));
+
+        assertEquals(List.of(pom), git.getCommittedFiles("Switched to branch-specific version."));
+    }
+
+    @Test
     @DisplayName("changes are pushed to the detected branch when pushing is enabled")
     void pushesToDetectedBranch() {
         writePom(project, "sample-pom.xml");

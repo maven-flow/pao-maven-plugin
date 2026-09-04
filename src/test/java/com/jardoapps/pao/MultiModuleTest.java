@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,18 @@ class MultiModuleTest extends RunnerTestSupport {
 
         assertTrue(read(project.resolve("core/pom.xml")).contains("<version>9.9.9-SNAPSHOT</version>"));
         assertTrue(read(project.resolve("app/pom.xml")).contains("<version>9.9.9-SNAPSHOT</version>"));
+    }
+
+    @Test
+    @DisplayName("every pom the run rewrote goes into the commit")
+    void commitsAllRewrittenPoms() {
+        writeReactor();
+
+        run(project, settings -> settings.setBranchName("feature/my-feature"));
+
+        assertEquals(
+                List.of(project.resolve("pom.xml"), project.resolve("core/pom.xml"), project.resolve("app/pom.xml")),
+                git.getCommittedFiles("Switched to branch-specific version."));
     }
 
     @Test

@@ -275,7 +275,7 @@ public class PreventOverwritesRunner {
         written.forEach(path -> log.info("Updated " + path));
 
         String fullMessage = message + settings.getCommitMessageSuffix();
-        git.commitAll(fullMessage);
+        git.commit(fullMessage, written);
         commits.add(fullMessage);
     }
 

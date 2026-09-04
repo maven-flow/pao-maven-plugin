@@ -1,5 +1,7 @@
 package com.jardoapps.pao.git;
 
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 
 /** The git operations the plugin needs, kept behind an interface so runs can be faked in tests. */
@@ -8,11 +10,12 @@ public interface GitClient {
     /** Sets the local user identity used for commits. */
     void configureUser(String name, String email);
 
-    /** True if the working tree has uncommitted changes. */
-    boolean hasUncommittedChanges();
-
-    /** Commits all tracked modifications. Does nothing if the tree is clean. */
-    void commitAll(String message);
+    /**
+     * Commits exactly the given files. Anything else in the working tree - an earlier
+     * pipeline step's output, a developer's own edits - is deliberately left out, so
+     * the commit matches its message.
+     */
+    void commit(String message, List<Path> files);
 
     /** Pushes HEAD to the given branch on {@code origin}. */
     void push(String branch);

@@ -44,17 +44,23 @@ public class CommandLineGitClient implements GitClient {
     }
 
     @Override
-    public boolean hasUncommittedChanges() {
-        return !run(true, "status", "--porcelain").output().isBlank();
-    }
-
-    @Override
-    public void commitAll(String message) {
-        if (!hasUncommittedChanges()) {
+    public void commit(String message, List<Path> files) {
+        if (files.isEmpty()) {
             log.debug("Nothing to commit.");
             return;
         }
-        run(true, "commit", "-a", "-m", message);
+        List<String> paths = files.stream().map(Path::toString).toList();
+
+        // Scoping both the staging and the commit to known paths keeps anything else
+        // in the working tree out of it, whoever or whatever put it there.
+        run(true, concat(List.of("add", "--"), paths));
+        run(true, concat(List.of("commit", "-m", message, "--"), paths));
+    }
+
+    private static String[] concat(List<String> head, List<String> tail) {
+        List<String> all = new ArrayList<>(head);
+        all.addAll(tail);
+        return all.toArray(new String[0]);
     }
 
     @Override

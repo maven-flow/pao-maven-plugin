@@ -1,13 +1,17 @@
 package com.jardoapps.pao.git;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** Records what the runner asked git to do, without touching a repository. */
 public class FakeGitClient implements GitClient {
 
     private final List<String> commits = new ArrayList<>();
+    private final Map<String, List<Path>> committedFiles = new LinkedHashMap<>();
     private final List<String> pushes = new ArrayList<>();
     private String configuredUser;
     private String currentBranch;
@@ -18,13 +22,9 @@ public class FakeGitClient implements GitClient {
     }
 
     @Override
-    public boolean hasUncommittedChanges() {
-        return true;
-    }
-
-    @Override
-    public void commitAll(String message) {
+    public void commit(String message, List<Path> files) {
         commits.add(message);
+        committedFiles.put(message, List.copyOf(files));
     }
 
     @Override
@@ -48,6 +48,11 @@ public class FakeGitClient implements GitClient {
 
     public List<String> getPushes() {
         return List.copyOf(pushes);
+    }
+
+    /** The files staged for a given commit message, in the order the runner passed them. */
+    public List<Path> getCommittedFiles(String message) {
+        return committedFiles.getOrDefault(message, List.of());
     }
 
     public String getConfiguredUser() {

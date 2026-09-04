@@ -174,6 +174,43 @@ test_invalid_pin_fails() {
     PASSED=$((PASSED + 1))
 }
 
+# --- Test: the commit covers the poms and nothing else ----------------------
+
+test_commit_scope() {
+    log "unrelated working tree changes stay out of the commit"
+    local dir
+    dir=$(mktemp -d)
+    trap 'rm -rf "$dir"' RETURN
+
+    setup_repo "$dir" "1.2.3-SNAPSHOT"
+
+    # Stand-ins for what an earlier pipeline step, or a developer, might leave
+    # behind: one modification to a tracked file and one untracked file.
+    echo "scratch" >> "$dir/core/pom.xml.bak"
+    git -C "$dir" add "$dir/core/pom.xml.bak"
+    git -C "$dir" commit -qm "Add a tracked file"
+    echo "touched by something else" >> "$dir/core/pom.xml.bak"
+    echo "untracked" > "$dir/untracked.txt"
+
+    run_goal "$dir" -Dpao.branchName=feature/FEA-123
+
+    local committed
+    committed=$(git -C "$dir" show --name-only --format= HEAD | sort | tr '\n' ' ')
+    if [[ "$committed" == "core/pom.xml pom.xml " ]]; then
+        log "  ok: only the poms were committed"
+    else
+        fail "expected only the poms in the commit, got '$committed'"
+    fi
+
+    if git -C "$dir" status --porcelain | grep -q 'core/pom.xml.bak'; then
+        log "  ok: the unrelated modification is still uncommitted"
+    else
+        fail "the unrelated modification was swept into the commit"
+    fi
+
+    PASSED=$((PASSED + 1))
+}
+
 # --- Test: pao.skip short-circuits ------------------------------------------
 
 test_skip() {
@@ -197,6 +234,7 @@ test_round_trip
 test_idempotent
 test_branch_from_environment
 test_invalid_pin_fails
+test_commit_scope
 test_skip
 
 echo ""
