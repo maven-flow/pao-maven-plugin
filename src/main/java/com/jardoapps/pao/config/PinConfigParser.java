@@ -43,8 +43,14 @@ public final class PinConfigParser {
 
     /** Parses the file if it exists, keeping only the rows matching {@code branchName}. */
     public PinConfig parse(Path file, String branchName) {
-        if (file == null || !Files.isRegularFile(file)) {
-            log.info("No config file at '" + file + "'. Using default behaviour.");
+        if (file == null) {
+            log.info("No config file configured. Using default behaviour.");
+            return PinConfig.empty();
+        }
+        if (!Files.isRegularFile(file)) {
+            // Worth saying out loud: someone who expected their pins to apply needs to
+            // see that the file the plugin looked for is not where it looked.
+            log.info("Config file '" + file + "' does not exist. Using default behaviour.");
             return PinConfig.empty();
         }
 
