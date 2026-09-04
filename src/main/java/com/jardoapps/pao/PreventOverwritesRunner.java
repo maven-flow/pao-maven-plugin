@@ -211,9 +211,11 @@ public class PreventOverwritesRunner {
     // --- Shared -----------------------------------------------------------
 
     /**
-     * Rewrites the project version across the reactor. Modules that inherit the
-     * version carry it in {@code <parent><version>}, which must move in step or the
-     * build breaks - so parent references to reactor projects are updated too.
+     * Rewrites the project version across the reactor. Every reference a module makes
+     * to another reactor project has to move in step with it, or that module resolves
+     * against the repository instead of the reactor: {@code <parent><version>} for the
+     * inherited version, and any {@code <dependency>} on a sibling that spells the
+     * version out rather than deriving it.
      */
     private void changeProjectVersion(List<ProjectModel> reactor, String oldVersion, String newVersion, String message,
             List<String> commits) {
@@ -234,8 +236,34 @@ public class PreventOverwritesRunner {
                 document.parentVersion()
                         .ifPresent(element -> session.setVersion(document, element, oldVersion, newVersion));
             }
+
+            updateSiblingDependencies(session, document, reactorKeys, oldVersion, newVersion);
         }
         commit(session, message, commits);
+    }
+
+    /** Moves dependencies on other reactor modules to the new version. */
+    private void updateSiblingDependencies(PomEditSession session, PomDocument document, Set<String> reactorKeys,
+            String oldVersion, String newVersion) {
+        for (PomDocument.DependencyEntry dependency : document.dependencies()) {
+            if (!reactorKeys.contains(dependency.key())) {
+                continue;
+            }
+            if (isMavenExpression(document.valueOf(dependency.versionElement()))) {
+                // ${project.version} and friends already follow the project version.
+                continue;
+            }
+            if (session.setVersion(document, dependency.versionElement(), oldVersion, newVersion)) {
+                log.info("Moving dependency " + dependency.key() + " to " + newVersion + " in " + document.getPath());
+            }
+        }
+    }
+
+    /** True for {@code ${project.*}} / {@code ${pom.*}}, which Maven resolves itself. */
+    private static boolean isMavenExpression(String value) {
+        return BranchVersions.propertyReference(value)
+                .filter(name -> name.startsWith("project.") || name.startsWith("pom."))
+                .isPresent();
     }
 
     private void commit(PomEditSession session, String message, List<String> commits) {
