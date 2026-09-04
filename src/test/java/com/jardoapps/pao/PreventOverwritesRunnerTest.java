@@ -2,6 +2,7 @@ package com.jardoapps.pao;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -320,6 +321,39 @@ class PreventOverwritesRunnerTest extends RunnerTestSupport {
         run(project, settings -> settings.setBranchName("feature/my-feature"));
 
         assertEquals(List.of(pom), git.getCommittedFiles("Switched to branch-specific version."));
+    }
+
+    @Test
+    @DisplayName("commits are attributed to the default identity")
+    void attributesCommitsToTheDefaultIdentity() {
+        writePom(project, "sample-pom.xml");
+
+        run(project, settings -> settings.setBranchName("feature/my-feature"));
+
+        assertEquals("ci-bot <ci-bot@example.com>", git.getCommitAuthor());
+    }
+
+    @Test
+    @DisplayName("a configured identity reaches git")
+    void attributesCommitsToTheConfiguredIdentity() {
+        writePom(project, "sample-pom.xml");
+
+        run(project, settings -> settings
+                .setBranchName("feature/my-feature")
+                .setGitUserName("release-bot")
+                .setGitUserEmail("release-bot@example.org"));
+
+        assertEquals("release-bot <release-bot@example.org>", git.getCommitAuthor());
+    }
+
+    @Test
+    @DisplayName("a run that commits nothing sets no identity")
+    void setsNoIdentityWhenNothingIsCommitted() {
+        writePom(project, "sample-pom.xml");
+
+        run(project, settings -> settings.setBranchName("main"));
+
+        assertNull(git.getCommitAuthor());
     }
 
     @Test
