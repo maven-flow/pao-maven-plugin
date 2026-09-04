@@ -243,6 +243,37 @@ class PreventOverwritesRunnerTest extends RunnerTestSupport {
     }
 
     @Test
+    @DisplayName("on a pull-request build the source branch wins over the synthetic merge ref")
+    void prefersPullRequestHeadRef() {
+        writePom(project, "sample-pom.xml");
+        // What GitHub Actions sets on a pull_request event: GITHUB_REF is
+        // refs/pull/123/merge, so GITHUB_REF_NAME is the unusable '123/merge'.
+        environment = Map.of(
+                "GITHUB_HEAD_REF", "feature/my-feature",
+                "GITHUB_REF_NAME", "123/merge");
+
+        RunResult result = run(project, settings -> {
+        });
+
+        assertEquals("feature/my-feature", result.branchName());
+    }
+
+    @Test
+    @DisplayName("on a push build the empty pull-request variable is ignored")
+    void ignoresEmptyPullRequestHeadRef() {
+        writePom(project, "sample-pom.xml");
+        // GITHUB_HEAD_REF is present but empty on push events.
+        environment = Map.of(
+                "GITHUB_HEAD_REF", "",
+                "GITHUB_REF_NAME", "feature/my-feature");
+
+        RunResult result = run(project, settings -> {
+        });
+
+        assertEquals("feature/my-feature", result.branchName());
+    }
+
+    @Test
     @DisplayName("the changes-made output is appended to the configured output file")
     void writesOutputFile() {
         writePom(project, "sample-pom.xml");

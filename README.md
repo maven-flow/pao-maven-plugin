@@ -64,6 +64,8 @@ jobs:
 
 The goal appends `changes-made=true|false` to `$GITHUB_OUTPUT`, so a later step can react to whether anything was rewritten.
 
+On `pull_request` and `pull_request_target` events the branch is read from `GITHUB_HEAD_REF` rather than `GITHUB_REF_NAME`, which on those events is the synthetic `<n>/merge` ref rather than a branch. GitLab merge request pipelines are handled the same way through `CI_MERGE_REQUEST_SOURCE_BRANCH_NAME`. Pushing back to the source branch of a pull request from a fork will not work regardless, so use `-Dpao.pushChanges=false` there.
+
 ### GitLab CI/CD
 
 ```yaml

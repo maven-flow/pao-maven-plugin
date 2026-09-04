@@ -15,7 +15,14 @@ public final class BranchDetector {
     private static final Map<String, String> CI_VARIABLES = new LinkedHashMap<>();
 
     static {
+        // On pull_request / pull_request_target events GITHUB_REF is refs/pull/<n>/merge,
+        // making GITHUB_REF_NAME the synthetic '<n>/merge' rather than a branch. That
+        // would derive a version nobody can merge back and then push to a ref the
+        // forge rejects. GITHUB_HEAD_REF carries the real source branch and is set
+        // only for pull-request events, so checking it first is safe on push builds.
+        CI_VARIABLES.put("GITHUB_HEAD_REF", "GitHub Actions (pull request)");
         CI_VARIABLES.put("GITHUB_REF_NAME", "GitHub Actions");
+        CI_VARIABLES.put("CI_MERGE_REQUEST_SOURCE_BRANCH_NAME", "GitLab CI/CD (merge request)");
         CI_VARIABLES.put("CI_COMMIT_REF_NAME", "GitLab CI/CD");
         CI_VARIABLES.put("BITBUCKET_BRANCH", "Bitbucket Pipelines");
         CI_VARIABLES.put("CIRCLE_BRANCH", "CircleCI");
