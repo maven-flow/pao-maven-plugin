@@ -73,10 +73,13 @@ public final class PinConfigParser {
                 continue;
             }
 
+            // Exactly three: stripComment has already removed any trailing comment, so a
+            // fourth column can only be a stray space inside a value - which would
+            // otherwise pin something subtly wrong instead of reporting the typo.
             String[] columns = line.trim().split("\\s+");
-            if (columns.length < 3) {
-                throw new PaoException(file + ":" + (i + 1)
-                        + ": malformed line (expected 3 columns: <branch-pattern> <target> <value>): " + line.trim());
+            if (columns.length != 3) {
+                throw new PaoException(file + ":" + (i + 1) + ": malformed line (expected 3 columns:"
+                        + " <branch-pattern> <target> <value>, found " + columns.length + "): " + line.trim());
             }
 
             String pattern = columns[0];
